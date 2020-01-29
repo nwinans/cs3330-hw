@@ -1,7 +1,4 @@
-.global
-.text
-
-Fib(n):
+Fib:
 li $2, 0            # load zero into the return register
 slti $18, $4, 1     # if (n < 1) tmp = 1
 bgtz $18, Exit      # if (tmp == 1) goto Exit
