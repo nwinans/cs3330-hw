@@ -3,9 +3,14 @@
 #define OP_SPECIAL    0x00
 #define SUBOP_ADD     0x20
 #define SUBOP_ADDU    0x21
+#define SUBOP_AND     0x24
+#define SUBOP_OR      0x25
+#define SUBOP_XOR     0x26
+#define SUBOP_NOR     0x27
 #define OP_ADDI       0x08
 #define OP_ADDIU      0x09
-#define SUBOP_SYSCALL 0xc
+#define OP_ANDI       0x0c
+#define SUBOP_SYSCALL 0x0c
 uint32_t dcd_op;     /* decoded opcode */
 uint32_t dcd_rs;     /* decoded rs operand */
 uint32_t dcd_rt;     /* decoded rt operand */
@@ -52,9 +57,21 @@ void execute()
             switch (dcd_funct)
             {
                 case SUBOP_ADD: 
+                    break;
                 case SUBOP_ADDU: 
                     NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rs] + CURRENT_STATE.REGS[dcd_rt];
-                    break;                
+                    break;      
+                case SUBOP_AND:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rs] & CURRENT_STATE.REGS[dcd_rt];
+                    break;     
+                case SUBOP_OR:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rs] | CURRENT_STATE.REGS[dcd_rt];
+                    break;     
+                case SUBOP_XOR:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rs] ^ CURRENT_STATE.REGS[dcd_rt];
+                    break;
+                case SUBOP_NOR:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rs] ~ CURRENT_STATE.REGS[dcd_rt];
                 case SUBOP_SYSCALL:
                     if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
@@ -63,9 +80,19 @@ void execute()
             break;
 
         case OP_ADDI:
+            //CHECK FOR OVERFLOW
+            //IF OVERFLOW
+            NEXT_STATE.REGS[14] = NEXT_STATE.PC;     // EPC = PC
+            NEXT_STATE.REGS[13] = 12;                   // Cause = Ov
+            NEXT_STATE.REGS[12] << 4;                   // Status << 4
+            NEXT_STATE.PC = 4;
+            //ELSE 
+            NEXT_STATE.REGS[dcd_rt] = CURRENT_STATE.REGS[dcd_rs] + dcd_se_imm;
         case OP_ADDIU:
             NEXT_STATE.REGS[dcd_rt] = CURRENT_STATE.REGS[dcd_rs] + dcd_se_imm;
             break;
+        case OP_ANDI:
+            NEXT_STATE.REGS[dcd_rt] = dcd_se_imm & CURRENT_STATE.REGS[dcd_rs]
     }
 
     CURRENT_STATE.REGS[0] = 0;
