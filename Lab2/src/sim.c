@@ -9,6 +9,8 @@
 #define SUBOP_NOR     0x27
 #define OP_ADDI       0x08
 #define OP_ADDIU      0x09
+#define OP_SLTI       0x0A
+#define OP_SLTIU      0x0B
 #define OP_ANDI       0x0c
 #define SUBOP_SYSCALL 0x0c
 uint32_t dcd_op;     /* decoded opcode */
@@ -25,6 +27,10 @@ uint32_t inst;       /* machine instruction */
 uint32_t sign_extend_h2w(uint16_t c)
 {
     return (c & 0x8000) ? (c | 0xffff8000) : c;
+}
+int32_t un_to_sign(uint32_t c)
+{
+    return c;
 }
 void fetch()
 {
@@ -71,7 +77,7 @@ void execute()
                     NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rs] ^ CURRENT_STATE.REGS[dcd_rt];
                     break;
                 case SUBOP_NOR:
-                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rs] ~ CURRENT_STATE.REGS[dcd_rt];
+                    NEXT_STATE.REGS[dcd_rd] = ~ (CURRENT_STATE.REGS[dcd_rs] | CURRENT_STATE.REGS[dcd_rt]);
                 case SUBOP_SYSCALL:
                     if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
@@ -91,8 +97,15 @@ void execute()
         case OP_ADDIU:
             NEXT_STATE.REGS[dcd_rt] = CURRENT_STATE.REGS[dcd_rs] + dcd_se_imm;
             break;
+        case OP_SLTI:
+            NEXT_STATE.REGS[dcd_rt] = (un_to_sign(CURRENT_STATE.REGS[dcd_rs]) < dcd_se_imm) ? 1 : 0;
+            break;
+        case OP_SLTIU:
+            NEXT_STATE.REGS[dcd_rt] = (CURRENT_STATE.REGS[dcd_rs] < dcd_se_imm) ? 1 : 0;
+            break;
         case OP_ANDI:
-            NEXT_STATE.REGS[dcd_rt] = dcd_se_imm & CURRENT_STATE.REGS[dcd_rs]
+            NEXT_STATE.REGS[dcd_rt] = dcd_imm & CURRENT_STATE.REGS[dcd_rs];
+            break;
     }
 
     CURRENT_STATE.REGS[0] = 0;
