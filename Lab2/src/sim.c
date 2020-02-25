@@ -1,3 +1,9 @@
+/**
+ * Part 1 of Lab 2 for CS 3330
+ * Nick Winans - nw5zp
+ * Extra Credit - Implemented Int Print, File Open, File Read, File Write, and File close SYSCALLS.
+ */
+
 #include <stdio.h>
 #include "shell.h"
 
@@ -166,8 +172,31 @@ void execute()
                     NEXT_STATE.REGS[dcd_rd] = ~ (CURRENT_STATE.REGS[dcd_rs] | CURRENT_STATE.REGS[dcd_rt]);
                     break;
                 case SUBOP_SYSCALL:
+                    if (CURRENT_STATE.REGS[2] == 1)
+                        printf("%d\n", CURRENT_STATE.REGS[4]);
                     if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
+                    if (CURRENT_STATE.REGS[2] == 13)
+                    {
+                        FILE *f = fopen((char *) (intptr_t) CURRENT_STATE.REGS[4], (CURRENT_STATE.REGS[5] == 0) ? "r" : "w");
+                        NEXT_STATE.REGS[2] = (uint32_t) f;
+                    }
+                    if (CURRENT_STATE.REGS[2] == 15)
+                    {
+                        char str[CURRENT_STATE.REGS[6]];
+                        *str = (char *) CURRENT_STATE.REGS[5]; 
+                        fprintf((FILE *) CURRENT_STATE.REGS[4], "%s", str);
+                        NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
+                    }
+                    if (CURRENT_STATE.REGS[2] == 14) 
+                    {
+                        fgets((char *) CURRENT_STATE.REGS[5], CURRENT_STATE.REGS[6], (FILE *) CURRENT_STATE.REGS[4]);
+                        NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
+                    }
+                    if (CURRENT_STATE.REGS[2] == 16)
+                    {
+                        fclose((FILE *) CURRENT_STATE.REGS[4]);
+                    }
                     break;
                 case SUBOP_SLT:
                     NEXT_STATE.REGS[dcd_rd] = (un_to_sign(CURRENT_STATE.REGS[dcd_rs]) < un_to_sign(CURRENT_STATE.REGS[dcd_rt])) ? 1 : 0;
