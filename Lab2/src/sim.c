@@ -1,9 +1,21 @@
 #include <stdio.h>
 #include "shell.h"
+
 #define OP_SPECIAL    0x00
 #define SUBOP_SLL     0x00
 #define SUBOP_SRL     0x02
 #define SUBOP_SRA     0x03
+#define SUBOP_SLLV    0x04
+#define SUBOP_SRLV    0x06
+#define SUBOP_SRAV    0x07
+#define SUBOP_MFHI    0x10
+#define SUBOP_MTHI    0x11
+#define SUBOP_MFLO    0x12
+#define SUBOP_MTLO    0x13
+#define SUBOP_MULT    0x18
+#define SUBOP_MULTU   0x19
+#define SUBOP_DIV     0x1A
+#define SUBOP_DIVU    0x1B
 #define SUBOP_ADD     0x20
 #define SUBOP_ADDU    0x21
 #define SUBOP_SUB     0x22
@@ -21,7 +33,8 @@
 #define OP_ANDI       0x0C
 #define OP_ORI        0x0D
 #define OP_XORI       0x0E
-#define SUBOP_SYSCALL 0x0c
+#define SUBOP_SYSCALL 0x0C
+
 uint32_t dcd_op;     /* decoded opcode */
 uint32_t dcd_rs;     /* decoded rs operand */
 uint32_t dcd_rt;     /* decoded rt operand */
@@ -32,6 +45,7 @@ uint32_t dcd_imm;    /* decoded immediate value */
 uint32_t dcd_target; /* decoded target address */
 int      dcd_se_imm; /* decoded sign-extended immediate value */
 uint32_t inst;       /* machine instruction */
+int64_t  product;
 
 uint32_t sign_extend_h2w(uint16_t c)
 {
@@ -42,10 +56,11 @@ int32_t un_to_sign(uint32_t c)
 {
     return c;
 }
+
 // adapted from: https://stackoverflow.com/a/38803993
-uint32_t sign_extension(uint32_t c)
+uint32_t sign_extension(uint32_t c, uint32_t amt)
 {
-    return (c&(1<<(dcd_shamt-1))) ? (c-(1<<dcd_shamt)) : c;
+    return (c&(1<<(amt-1))) ? (c-(1<<amt)) : c;
 }
 
 void fetch()
@@ -85,8 +100,47 @@ void execute()
                     NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] >> dcd_shamt;
                     break;
                 case SUBOP_SRA:
-                    NEXT_STATE.REGS[dcd_rd] = sign_extension(CURRENT_STATE.REGS[dcd_rt] >> dcd_shamt);
+                    NEXT_STATE.REGS[dcd_rd] = sign_extension(CURRENT_STATE.REGS[dcd_rt] >> dcd_shamt, dcd_shamt);
                     break;
+                case SUBOP_SLLV:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] << CURRENT_STATE.REGS[dcd_rs];
+                    break;
+                case SUBOP_SRLV:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] >> CURRENT_STATE.REGS[dcd_rs];
+                    break;
+                case SUBOP_SRAV:
+                    NEXT_STATE.REGS[dcd_rd] = sign_extension(CURRENT_STATE.REGS[dcd_rt] >> CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rs]);
+                    break;
+                case SUBOP_MFHI:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.HI;
+                    break;
+                case SUBOP_MTHI:
+                    NEXT_STATE.HI = CURRENT_STATE.REGS[dcd_rs];
+                    break;
+                case SUBOP_MFLO:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.LO;
+                    break;
+                case SUBOP_MTLO:
+                    NEXT_STATE.LO = CURRENT_STATE.REGS[dcd_rs];
+                    break;
+                case SUBOP_MULT:
+                    product = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) * un_to_sign(CURRENT_STATE.REGS[dcd_rt]);
+                    NEXT_STATE.HI = (product >> 31) & 0xFFFFFFFF;
+                    NEXT_STATE.LO = (product) & 0xFFFFFFFF;
+                    break;
+                case SUBOP_MULTU:
+                    product = CURRENT_STATE.REGS[dcd_rs] * CURRENT_STATE.REGS[dcd_rt];
+                    NEXT_STATE.HI = (product >> 31) & 0xFFFFFFFF;
+                    NEXT_STATE.LO = (product) & 0xFFFFFFFF;
+                    break;
+                case SUBOP_DIV:
+                    NEXT_STATE.LO = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) / un_to_sign(CURRENT_STATE.REGS[dcd_rt]);
+                    NEXT_STATE.HI = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) % un_to_sign(CURRENT_STATE.REGS[dcd_rt]);
+                    break;      
+                case SUBOP_DIVU:
+                    NEXT_STATE.LO = CURRENT_STATE.REGS[dcd_rs] / CURRENT_STATE.REGS[dcd_rt];
+                    NEXT_STATE.HI = CURRENT_STATE.REGS[dcd_rs] % CURRENT_STATE.REGS[dcd_rt];
+                    break;                 
                 case SUBOP_ADD: 
                     NEXT_STATE.REGS[dcd_rd] = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) + un_to_sign(CURRENT_STATE.REGS[dcd_rt]);
                     break;
@@ -119,7 +173,8 @@ void execute()
                     NEXT_STATE.REGS[dcd_rd] = (un_to_sign(CURRENT_STATE.REGS[dcd_rs]) < un_to_sign(CURRENT_STATE.REGS[dcd_rt])) ? 1 : 0;
                     break;
                 case SUBOP_SLTU:
-                    NEXT_STATE.REGS[dcd_rd] = (CURRENT_STATE.REGS[dcd_rs])
+                    NEXT_STATE.REGS[dcd_rd] = (CURRENT_STATE.REGS[dcd_rs] < CURRENT_STATE.REGS[dcd_rt]) ? 1 : 0;
+                    break;
             }
             break;
 
@@ -155,7 +210,4 @@ void process_instruction()
    fetch();
    decode();
    execute();
-    /* execute one instruction here. You should use CURRENT_STATE and modify
-     * values in NEXT_STATE. You can call mem_read_32() and mem_write_32() to
-     * access memory. */
 }
