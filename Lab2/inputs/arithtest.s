@@ -18,7 +18,9 @@ main:
         and     $13, $11, $5            # $13 = 0x00000000
         andi    $14, $4, 100            # $14 = 0x00000000
         sub     $15, $zero, $10         # $15 = 0xFFFFFB01
-        #lui     $17, 100
+        mult    $7, $3                  
+        mfhi    $16                     # $16 = 0x00000026
+        mflo    $17                     # $17 = 0x91387800
         addiu   $v0, $zero, 0xa         # $2 = 0x0000000A
         syscall
         

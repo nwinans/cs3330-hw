@@ -45,7 +45,7 @@ uint32_t dcd_imm;    /* decoded immediate value */
 uint32_t dcd_target; /* decoded target address */
 int      dcd_se_imm; /* decoded sign-extended immediate value */
 uint32_t inst;       /* machine instruction */
-int64_t  product;
+unsigned long long int product;
 
 uint32_t sign_extend_h2w(uint16_t c)
 {
@@ -55,6 +55,11 @@ uint32_t sign_extend_h2w(uint16_t c)
 int32_t un_to_sign(uint32_t c)
 {
     return c;
+}
+
+int64_t sign_extend_w2dw(uint32_t c)
+{
+    return (c & 0x80000000) ? (c | 0xFFFFFFFF80000000) : c;
 }
 
 // adapted from: https://stackoverflow.com/a/38803993
@@ -124,13 +129,13 @@ void execute()
                     NEXT_STATE.LO = CURRENT_STATE.REGS[dcd_rs];
                     break;
                 case SUBOP_MULT:
-                    product = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) * un_to_sign(CURRENT_STATE.REGS[dcd_rt]);
-                    NEXT_STATE.HI = (product >> 31) & 0xFFFFFFFF;
+                    product = sign_extend_w2dw(CURRENT_STATE.REGS[dcd_rs]) * sign_extend_w2dw(CURRENT_STATE.REGS[dcd_rt]);
+                    NEXT_STATE.HI = (product >> 32) & 0xFFFFFFFF;
                     NEXT_STATE.LO = (product) & 0xFFFFFFFF;
                     break;
                 case SUBOP_MULTU:
-                    product = CURRENT_STATE.REGS[dcd_rs] * CURRENT_STATE.REGS[dcd_rt];
-                    NEXT_STATE.HI = (product >> 31) & 0xFFFFFFFF;
+                    product = ((uint64_t) CURRENT_STATE.REGS[dcd_rs]) * ((uint64_t) CURRENT_STATE.REGS[dcd_rt]);
+                    NEXT_STATE.HI = (product >> 32) & 0xFFFFFFFF;
                     NEXT_STATE.LO = (product) & 0xFFFFFFFF;
                     break;
                 case SUBOP_DIV:
