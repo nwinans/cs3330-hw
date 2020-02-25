@@ -1,8 +1,8 @@
 
 Current register/bus values :
 -------------------------------------
-Instruction Count : 19
-PC                : 0x0040004c
+Instruction Count : 40
+PC                : 0x004000a0
 Registers:
 R0: 0x00000000
 R1: 0x00000000
@@ -22,10 +22,10 @@ R14: 0x00000000
 R15: 0xfffffb01
 R16: 0x00000026
 R17: 0x91387800
-R18: 0x00000000
-R19: 0x00000000
-R20: 0x00000000
-R21: 0x00000000
+R18: 0xfffffffe
+R19: 0x00000001
+R20: 0x00000009
+R21: 0xfffffe00
 R22: 0x00000000
-R23: 0x00000000
+R23: 0x000fffff
 R24:

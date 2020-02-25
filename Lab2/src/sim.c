@@ -45,7 +45,7 @@ uint32_t dcd_imm;    /* decoded immediate value */
 uint32_t dcd_target; /* decoded target address */
 int      dcd_se_imm; /* decoded sign-extended immediate value */
 uint32_t inst;       /* machine instruction */
-unsigned long long int product;
+uint64_t product;
 
 uint32_t sign_extend_h2w(uint16_t c)
 {
@@ -62,11 +62,6 @@ int64_t sign_extend_w2dw(uint32_t c)
     return (c & 0x80000000) ? (c | 0xFFFFFFFF80000000) : c;
 }
 
-// adapted from: https://stackoverflow.com/a/38803993
-uint32_t sign_extension(uint32_t c, uint32_t amt)
-{
-    return (c&(1<<(amt-1))) ? (c-(1<<amt)) : c;
-}
 
 void fetch()
 {
@@ -99,22 +94,22 @@ void execute()
             switch (dcd_funct)
             {
                 case SUBOP_SLL:
-                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] << dcd_shamt;
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] << (dcd_shamt & 0x1F);
                     break;
                 case SUBOP_SRL:
-                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] >> dcd_shamt;
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] >> (dcd_shamt & 0x1F);
                     break;
                 case SUBOP_SRA:
-                    NEXT_STATE.REGS[dcd_rd] = sign_extension(CURRENT_STATE.REGS[dcd_rt] >> dcd_shamt, dcd_shamt);
+                    NEXT_STATE.REGS[dcd_rd] = ((int32_t) CURRENT_STATE.REGS[dcd_rt]) >> (dcd_shamt & 0x1F);
                     break;
                 case SUBOP_SLLV:
-                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] << CURRENT_STATE.REGS[dcd_rs];
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] << (CURRENT_STATE.REGS[dcd_rs] & 0x1F);
                     break;
                 case SUBOP_SRLV:
-                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] >> CURRENT_STATE.REGS[dcd_rs];
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.REGS[dcd_rt] >> (CURRENT_STATE.REGS[dcd_rs] & 0x1F);
                     break;
                 case SUBOP_SRAV:
-                    NEXT_STATE.REGS[dcd_rd] = sign_extension(CURRENT_STATE.REGS[dcd_rt] >> CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rs]);
+                    NEXT_STATE.REGS[dcd_rd] = ((int32_t) CURRENT_STATE.REGS[dcd_rt]) >> (CURRENT_STATE.REGS[dcd_rs] & 0x1F);
                     break;
                 case SUBOP_MFHI:
                     NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.HI;
