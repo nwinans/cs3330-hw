@@ -14,6 +14,7 @@
 #define SUBOP_SLLV    0x04
 #define SUBOP_SRLV    0x06
 #define SUBOP_SRAV    0x07
+#define SUBOP_JR      0x08
 #define SUBOP_MFHI    0x10
 #define SUBOP_MTHI    0x11
 #define SUBOP_MFLO    0x12
@@ -32,6 +33,10 @@
 #define SUBOP_NOR     0x27
 #define SUBOP_SLT     0x2A
 #define SUBOP_SLTU    0x2B
+#define OP_J          0x02
+#define OP_JAL        0x03
+#define OP_BEQ        0x04
+#define OP_BGTZ       0x07
 #define OP_ADDI       0x08
 #define OP_ADDIU      0x09
 #define OP_SLTI       0x0A
@@ -116,6 +121,9 @@ void execute()
                     break;
                 case SUBOP_SRAV:
                     NEXT_STATE.REGS[dcd_rd] = ((int32_t) CURRENT_STATE.REGS[dcd_rt]) >> (CURRENT_STATE.REGS[dcd_rs] & 0x1F);
+                    break;
+                case SUBOP_JR:
+                    NEXT_STATE.PC = CURRENT_STATE.REGS[dcd_rs];
                     break;
                 case SUBOP_MFHI:
                     NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.HI;
@@ -206,7 +214,18 @@ void execute()
                     break;
             }
             break;
-
+        case OP_J:
+            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
+            break;
+        case OP_JAL:
+            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
+            NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
+        case OP_BEQ:
+            if (CURRENT_STATE.REGS[dcd_rs] == CURRENT_STATE.REGS[dcd_rt]) NEXT_STATE.PC += (dcd_imm) << 2;
+            break;
+        case OP_BGTZ:
+            if (CURRENT_STATE.REGS[dcd_rs] > 0) NEXT_STATE.PC += (dcd_imm << 2);
+            break;
         case OP_ADDI:
             NEXT_STATE.REGS[dcd_rt] = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) + dcd_se_imm;
             break;

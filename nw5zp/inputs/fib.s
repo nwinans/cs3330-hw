@@ -8,7 +8,7 @@ li $2, 0            # load zero into the return register
 slti $18, $4, 1     # if (n < 1) tmp = 1
 bgtz $18, Exit      # if (tmp == 1) goto Exit
 li $16, 0           # a = 0
-li $17, 1           # b = 0
+li $17, 1           # b = 1
 add $2, $16, $17    # c = a + b 
 
 Loop:
@@ -21,4 +21,5 @@ addi $4, $4, -1     # n--
 j Loop            # go to Loop
 
 Exit:
-jr $31             # exit program
+addiu   $v0, $zero, 0xa 
+syscall
