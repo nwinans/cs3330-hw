@@ -15,6 +15,8 @@
 #define SUBOP_SRLV    0x06
 #define SUBOP_SRAV    0x07
 #define SUBOP_JR      0x08
+#define SUBOP_JALR    0x09
+#define SUBOP_SYSCALL 0x0C
 #define SUBOP_MFHI    0x10
 #define SUBOP_MTHI    0x11
 #define SUBOP_MFLO    0x12
@@ -36,6 +38,8 @@
 #define OP_J          0x02
 #define OP_JAL        0x03
 #define OP_BEQ        0x04
+#define OP_BNE        0x05
+#define OP_BLEZ       0x06
 #define OP_BGTZ       0x07
 #define OP_ADDI       0x08
 #define OP_ADDIU      0x09
@@ -44,7 +48,13 @@
 #define OP_ANDI       0x0C
 #define OP_ORI        0x0D
 #define OP_XORI       0x0E
-#define SUBOP_SYSCALL 0x0C
+#define OP_LUI        0x0F
+#define OP_LB         0x20
+#define OP_LH         0x21
+#define OP_LW         0x23
+#define OP_LBU        0x24
+#define OP_LHU        0x25
+#define OP_SW         0x2B
 
 uint32_t dcd_op;     /* decoded opcode */
 uint32_t dcd_rs;     /* decoded rs operand */
@@ -61,6 +71,11 @@ uint64_t product;
 uint32_t sign_extend_h2w(uint16_t c)
 {
     return (c & 0x8000) ? (c | 0xffff8000) : c;
+}
+
+uint32_t sign_extend_b2w(uint8_t c)
+{
+    return (c & 0x80) ? (c | 0xFFFFFF80) : c;
 }
 
 int32_t un_to_sign(uint32_t c)
@@ -125,6 +140,10 @@ void execute()
                 case SUBOP_JR:
                     NEXT_STATE.PC = CURRENT_STATE.REGS[dcd_rs];
                     break;
+                case SUBOP_JALR:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.PC + 4; 
+                    NEXT_STATE.PC = CURRENT_STATE.REGS[dcd_rs];
+                    break;
                 case SUBOP_MFHI:
                     NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.HI;
                     break;
@@ -182,29 +201,30 @@ void execute()
                 case SUBOP_SYSCALL:
                     if (CURRENT_STATE.REGS[2] == 1)
                         printf("%d\n", CURRENT_STATE.REGS[4]);
-                    if (CURRENT_STATE.REGS[2] == 10)
+                    else if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
-                    if (CURRENT_STATE.REGS[2] == 13)
+                    else if (CURRENT_STATE.REGS[2] == 13)
                     {
                         FILE *f = fopen((char *) (intptr_t) CURRENT_STATE.REGS[4], (CURRENT_STATE.REGS[5] == 0) ? "r" : "w");
                         NEXT_STATE.REGS[2] = (uint32_t) f;
                     }
-                    if (CURRENT_STATE.REGS[2] == 15)
+                    else if (CURRENT_STATE.REGS[2] == 15)
                     {
                         char str[CURRENT_STATE.REGS[6]];
                         *str = (char *) CURRENT_STATE.REGS[5]; 
                         fprintf((FILE *) CURRENT_STATE.REGS[4], "%s", str);
                         NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
-                    if (CURRENT_STATE.REGS[2] == 14) 
+                    else if (CURRENT_STATE.REGS[2] == 14) 
                     {
                         fgets((char *) CURRENT_STATE.REGS[5], CURRENT_STATE.REGS[6], (FILE *) CURRENT_STATE.REGS[4]);
                         NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
-                    if (CURRENT_STATE.REGS[2] == 16)
+                    else if (CURRENT_STATE.REGS[2] == 16)
                     {
                         fclose((FILE *) CURRENT_STATE.REGS[4]);
                     }
+                    printf("%d", RUN_BIT);
                     break;
                 case SUBOP_SLT:
                     NEXT_STATE.REGS[dcd_rd] = (un_to_sign(CURRENT_STATE.REGS[dcd_rs]) < un_to_sign(CURRENT_STATE.REGS[dcd_rt])) ? 1 : 0;
@@ -218,13 +238,24 @@ void execute()
             NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
             break;
         case OP_JAL:
-            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
+            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000);
             NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
+            break;
         case OP_BEQ:
-            if (CURRENT_STATE.REGS[dcd_rs] == CURRENT_STATE.REGS[dcd_rt]) NEXT_STATE.PC += (dcd_imm) << 2;
+            if (CURRENT_STATE.REGS[dcd_rs] == CURRENT_STATE.REGS[dcd_rt])
+                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
+            break;
+        case OP_BNE:
+            if (CURRENT_STATE.REGS[dcd_rs] != CURRENT_STATE.REGS[dcd_rt])
+                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
+            break;
+        case OP_BLEZ:
+            if (CURRENT_STATE.REGS[dcd_rs] <= 0)
+                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
             break;
         case OP_BGTZ:
-            if (CURRENT_STATE.REGS[dcd_rs] > 0) NEXT_STATE.PC += (dcd_imm << 2);
+            if (CURRENT_STATE.REGS[dcd_rs] > 0) 
+                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
             break;
         case OP_ADDI:
             NEXT_STATE.REGS[dcd_rt] = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) + dcd_se_imm;
@@ -246,6 +277,27 @@ void execute()
             break;
         case OP_XORI:
             NEXT_STATE.REGS[dcd_rt] = dcd_imm ^ CURRENT_STATE.REGS[dcd_rs];
+            break;
+        case OP_LUI:
+            NEXT_STATE.REGS[dcd_rt] = dcd_imm << 16;
+            break;
+        case OP_LB:
+            NEXT_STATE.REGS[dcd_rt] = sign_extend_b2w(mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFF);
+            break;
+        case OP_LH:
+            NEXT_STATE.REGS[dcd_rt] = sign_extend_h2w(mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFFFF);
+            break;
+        case OP_LBU:
+            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFF;
+            break;
+        case OP_LHU:
+            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFFFF;
+            break;
+        case OP_LW:
+            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]);
+            break;
+        case OP_SW:
+            mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt]);
             break;
     }
 

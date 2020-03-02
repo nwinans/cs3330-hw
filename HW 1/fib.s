@@ -21,4 +21,6 @@ addi $4, $4, -1     # n--
 j Loop            # go to Loop
 
 Exit:
-jr $31             # exit program
+addiu   $v0, $zero, 0xa         # $2 = 0x0000000A
+syscall
+syscall
