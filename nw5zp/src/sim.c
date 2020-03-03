@@ -35,6 +35,7 @@
 #define SUBOP_NOR     0x27
 #define SUBOP_SLT     0x2A
 #define SUBOP_SLTU    0x2B
+#define OP_REGIMM     0x01
 #define OP_J          0x02
 #define OP_JAL        0x03
 #define OP_BEQ        0x04
@@ -54,7 +55,12 @@
 #define OP_LW         0x23
 #define OP_LBU        0x24
 #define OP_LHU        0x25
+#define OP_SB         0x28
+#define OP_SH         0x29
 #define OP_SW         0x2B
+#define REGOP_BGEZ    0x01
+#define REGOP_BLTZAL  0x10
+#define REGOP_BGEZAL  0x11
 
 uint32_t dcd_op;     /* decoded opcode */
 uint32_t dcd_rs;     /* decoded rs operand */
@@ -200,13 +206,24 @@ void execute()
                     break;
                 case SUBOP_SYSCALL:
                     if (CURRENT_STATE.REGS[2] == 1)
-                        printf("%d\n", CURRENT_STATE.REGS[4]);
+                        printf("%d", CURRENT_STATE.REGS[4]);
+                    else if (CURRENT_STATE.REGS[2] == 4)
+                        printf("%s", (char) mem_read_32(CURRENT_STATE.REGS[4]));
+                    else if (CURRENT_STATE.REGS[2] == 9)
+                        CURRENT_STATE.REGS[2] = (int) malloc(CURRENT_STATE.REGS[4]);
                     else if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
+                    else if (CURRENT_STATE.REGS[2] == 11)
+                        printf("%s", (char) CURRENT_STATE.REGS[4]);
                     else if (CURRENT_STATE.REGS[2] == 13)
                     {
                         FILE *f = fopen((char *) (intptr_t) CURRENT_STATE.REGS[4], (CURRENT_STATE.REGS[5] == 0) ? "r" : "w");
                         NEXT_STATE.REGS[2] = (uint32_t) f;
+                    }
+                    else if (CURRENT_STATE.REGS[2] == 14) 
+                    {
+                        fgets((char *) CURRENT_STATE.REGS[5], CURRENT_STATE.REGS[6], (FILE *) CURRENT_STATE.REGS[4]);
+                        NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
                     else if (CURRENT_STATE.REGS[2] == 15)
                     {
@@ -215,16 +232,19 @@ void execute()
                         fprintf((FILE *) CURRENT_STATE.REGS[4], "%s", str);
                         NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
-                    else if (CURRENT_STATE.REGS[2] == 14) 
-                    {
-                        fgets((char *) CURRENT_STATE.REGS[5], CURRENT_STATE.REGS[6], (FILE *) CURRENT_STATE.REGS[4]);
-                        NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
-                    }
                     else if (CURRENT_STATE.REGS[2] == 16)
                     {
                         fclose((FILE *) CURRENT_STATE.REGS[4]);
                     }
-                    printf("%d", RUN_BIT);
+                    else if (CURRENT_STATE.REGS[2] == 17)
+                    {
+                        printf("Exiting with code %d", CURRENT_STATE.REGS[4]);
+                        RUN_BIT = 0;
+                    }
+                    else if (CURRENT_STATE.REGS[2] == 34)
+                    {
+                        printf("%x", CURRENT_STATE.REGS[4]);
+                    }
                     break;
                 case SUBOP_SLT:
                     NEXT_STATE.REGS[dcd_rd] = (un_to_sign(CURRENT_STATE.REGS[dcd_rs]) < un_to_sign(CURRENT_STATE.REGS[dcd_rt])) ? 1 : 0;
@@ -234,6 +254,28 @@ void execute()
                     break;
             }
             break;
+        case OP_REGIMM:
+            switch (CURRENT_STATE.REGS[dcd_rt])
+            {
+                case REGOP_BGEZ:
+                    if (CURRENT_STATE.REGS[dcd_rs] >= 0)
+                        NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+                    break;
+                case REGOP_BLTZAL:
+                    if (CURRENT_STATE.REGS[dcd_rs] < 0)
+                    {
+                        NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
+                        NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+                    }
+                    break;
+                case REGOP_BGEZAL:
+                    if (CURRENT_STATE.REGS[dcd_rs] >= 0)
+                    {
+                        NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
+                        NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+                    }
+                    break;
+            }
         case OP_J:
             NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
             break;
@@ -295,6 +337,12 @@ void execute()
             break;
         case OP_LW:
             NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]);
+            break;
+        case OP_SB:
+            mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt] & 0xFF);
+            break;
+        case OP_SH:
+            mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt] & 0xFFFF);
             break;
         case OP_SW:
             mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt]);
