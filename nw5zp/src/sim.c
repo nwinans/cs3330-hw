@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "shell.h"
 
 #define OP_SPECIAL    0x00
@@ -255,7 +256,7 @@ void execute()
             }
             break;
         case OP_REGIMM:
-            switch (CURRENT_STATE.REGS[dcd_rt])
+            switch (dcd_rt)
             {
                 case REGOP_BGEZ:
                     if (CURRENT_STATE.REGS[dcd_rs] >= 0)
@@ -267,6 +268,8 @@ void execute()
                         NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
                         NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
                     }
+                    else {
+                    }
                     break;
                 case REGOP_BGEZAL:
                     if (CURRENT_STATE.REGS[dcd_rs] >= 0)
@@ -276,24 +279,25 @@ void execute()
                     }
                     break;
             }
+            break;
         case OP_J:
             NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
             break;
         case OP_JAL:
-            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000);
+            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
             NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
             break;
         case OP_BEQ:
             if (CURRENT_STATE.REGS[dcd_rs] == CURRENT_STATE.REGS[dcd_rt])
-                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
             break;
         case OP_BNE:
             if (CURRENT_STATE.REGS[dcd_rs] != CURRENT_STATE.REGS[dcd_rt])
-                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
             break;
         case OP_BLEZ:
             if (CURRENT_STATE.REGS[dcd_rs] <= 0)
-                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
             break;
         case OP_BGTZ:
             if (CURRENT_STATE.REGS[dcd_rs] > 0) 
