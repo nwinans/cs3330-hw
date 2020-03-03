@@ -74,6 +74,10 @@ uint32_t dcd_target; /* decoded target address */
 int      dcd_se_imm; /* decoded sign-extended immediate value */
 uint32_t inst;       /* machine instruction */
 uint64_t product;
+int offset;
+int shift;
+int value;
+int mask;
 
 uint32_t sign_extend_h2w(uint16_t c)
 {
@@ -259,20 +263,18 @@ void execute()
             switch (dcd_rt)
             {
                 case REGOP_BGEZ:
-                    if (CURRENT_STATE.REGS[dcd_rs] >= 0)
+                    if ((int) CURRENT_STATE.REGS[dcd_rs] >= 0)
                         NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
                     break;
                 case REGOP_BLTZAL:
-                    if (CURRENT_STATE.REGS[dcd_rs] < 0)
+                    if ((int) CURRENT_STATE.REGS[dcd_rs] < 0)
                     {
                         NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
                         NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
                     }
-                    else {
-                    }
                     break;
                 case REGOP_BGEZAL:
-                    if (CURRENT_STATE.REGS[dcd_rs] >= 0)
+                    if ((int) CURRENT_STATE.REGS[dcd_rs] >= 0)
                     {
                         NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
                         NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
@@ -296,12 +298,12 @@ void execute()
                 NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
             break;
         case OP_BLEZ:
-            if (CURRENT_STATE.REGS[dcd_rs] <= 0)
+            if ((int) CURRENT_STATE.REGS[dcd_rs] <= 0)
                 NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
             break;
         case OP_BGTZ:
-            if (CURRENT_STATE.REGS[dcd_rs] > 0) 
-                NEXT_STATE.PC += (dcd_se_imm << 2) - 4;
+            if ((int) CURRENT_STATE.REGS[dcd_rs] > 0) 
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
             break;
         case OP_ADDI:
             NEXT_STATE.REGS[dcd_rt] = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) + dcd_se_imm;
@@ -328,25 +330,37 @@ void execute()
             NEXT_STATE.REGS[dcd_rt] = dcd_imm << 16;
             break;
         case OP_LB:
-            NEXT_STATE.REGS[dcd_rt] = sign_extend_b2w(mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFF);
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 4);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = sign_extend_b2w((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
             break;
         case OP_LH:
-            NEXT_STATE.REGS[dcd_rt] = sign_extend_h2w(mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFFFF);
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 2);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = sign_extend_b2w((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
             break;
         case OP_LBU:
-            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFF;
+            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFF000000;
             break;
         case OP_LHU:
-            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFFFF;
+            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFFFF0000;
             break;
         case OP_LW:
             NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]);
             break;
         case OP_SB:
-            mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt] & 0xFF);
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 4);
+            shift = dcd_se_imm - offset;
+            value = (CURRENT_STATE.REGS[dcd_rt] & (0xFF)) << (offset * 8);
+            mask = (mem_read_32(CURRENT_STATE.REGS[dcd_rs] + shift)) & (~(0xFF << (offset * 8)));
+            mem_write_32(shift + CURRENT_STATE.REGS[dcd_rs], value + mask);
             break;
         case OP_SH:
-            mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt] & 0xFFFF);
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 2);
+            shift = dcd_se_imm - offset;
+            value = (CURRENT_STATE.REGS[dcd_rt] & (0xFFFF)) << (offset * 16);
+            mask = (mem_read_32(CURRENT_STATE.REGS[dcd_rs] + shift)) & (~(0xFFFF << (offset * 16)));
+            mem_write_32(shift + CURRENT_STATE.REGS[dcd_rs], value + mask);            
             break;
         case OP_SW:
             mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt]);
