@@ -213,13 +213,34 @@ void execute()
                     if (CURRENT_STATE.REGS[2] == 1)
                         printf("%d", CURRENT_STATE.REGS[4]);
                     else if (CURRENT_STATE.REGS[2] == 4)
-                        printf("%s", (char) mem_read_32(CURRENT_STATE.REGS[4]));
+                    {
+                        shift = 0;
+                        unsigned int input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        unsigned int c,d,e,f;
+                        while (1) {
+                            c = (input & 0xFF000000) >> 24;
+                            d = (input & 0xFF0000) >> 16;
+                            e = (input & 0xFF00) >> 8;
+                            f = (input & 0xFF);
+                            if (c == 0) break;
+                            printf("%c", c);
+                            if (d == 0) break;
+                            printf("%c", d);
+                            if (e == 0) break;
+                            printf("%c", e);
+                            if (f == 0) break;
+                            printf("%c", f);
+                            shift += 4;
+                            input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        }
+                        
+                    }
                     else if (CURRENT_STATE.REGS[2] == 9)
                         CURRENT_STATE.REGS[2] = (int) malloc(CURRENT_STATE.REGS[4]);
                     else if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
                     else if (CURRENT_STATE.REGS[2] == 11)
-                        printf("%s", (char) CURRENT_STATE.REGS[4]);
+                        printf("%c", CURRENT_STATE.REGS[4]);
                     else if (CURRENT_STATE.REGS[2] == 13)
                     {
                         FILE *f = fopen((char *) (intptr_t) CURRENT_STATE.REGS[4], (CURRENT_STATE.REGS[5] == 0) ? "r" : "w");
