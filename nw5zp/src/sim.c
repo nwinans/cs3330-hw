@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "shell.h"
 
 #define OP_SPECIAL    0x00
@@ -78,6 +79,7 @@ int offset;
 int shift;
 int value;
 int mask;
+char * filemode;
 
 uint32_t sign_extend_h2w(uint16_t c)
 {
@@ -233,43 +235,100 @@ void execute()
                             shift += 4;
                             input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
                         }
-                        
                     }
                     else if (CURRENT_STATE.REGS[2] == 9)
-                        CURRENT_STATE.REGS[2] = (int) malloc(CURRENT_STATE.REGS[4]);
+                        CURRENT_STATE.REGS[2] = (int) (long) malloc(CURRENT_STATE.REGS[4]);
                     else if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
                     else if (CURRENT_STATE.REGS[2] == 11)
                         printf("%c", CURRENT_STATE.REGS[4]);
                     else if (CURRENT_STATE.REGS[2] == 13)
                     {
-                        FILE *f = fopen((char *) (intptr_t) CURRENT_STATE.REGS[4], (CURRENT_STATE.REGS[5] == 0) ? "r" : "w");
-                        NEXT_STATE.REGS[2] = (uint32_t) f;
+                        char buffer[100];
+                        shift = 0;
+                        unsigned int input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        unsigned int c,d,e,g;
+                        while (1) {
+                            c = (input & 0xFF000000) >> 24;
+                            d = (input & 0xFF0000) >> 16;
+                            e = (input & 0xFF00) >> 8;
+                            g = (input & 0xFF);
+                            if (c == 0) break;
+                            sprintf(buffer+shift, "%c", c);
+                            if (d == 0) break;
+                            sprintf(buffer+shift+1, "%c", d);
+                            if (e == 0) break;
+                            sprintf(buffer+shift+2, "%c", e);
+                            if (g == 0) break;
+                            sprintf(buffer+shift+3, "%c", g);
+                            shift += 4;
+                            input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        }
+                        filemode = (CURRENT_STATE.REGS[5] == 0) ? "r+" : "w+";
+                        FILE * f = fopen(buffer, filemode);
+                        NEXT_STATE.REGS[2] = fileno(f);
                     }
                     else if (CURRENT_STATE.REGS[2] == 14) 
                     {
-                        fgets((char *) CURRENT_STATE.REGS[5], CURRENT_STATE.REGS[6], (FILE *) CURRENT_STATE.REGS[4]);
+                        FILE *fi = fdopen(CURRENT_STATE.REGS[4], "r");
+                        rewind(fi);
+                        char buffer[CURRENT_STATE.REGS[6] + 1];
+                        if (fread(buffer, 1, CURRENT_STATE.REGS[6], fi) == 0)
+                        {
+                            NEXT_STATE.REGS[2] = 0;
+                            break;
+                        };
+                        shift = CURRENT_STATE.REGS[6];
+                        char temp[4];
+                        char * b = buffer;
+                        while (shift > 0) 
+                        {
+                            memcpy (temp, b, 4);                        
+                            char * tt = temp;
+                            uint32_t data = ((*tt) << 24) + (*(tt+1) << 16) + (*(tt+2) << 8) + (*(tt+3));
+                            mem_write_32(CURRENT_STATE.REGS[5] + (CURRENT_STATE.REGS[6] - shift), data);
+                            shift -= 4;
+                            b += 4;
+                        }
                         NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
                     else if (CURRENT_STATE.REGS[2] == 15)
-                    {
-                        char str[CURRENT_STATE.REGS[6]];
-                        *str = (char *) CURRENT_STATE.REGS[5]; 
-                        fprintf((FILE *) CURRENT_STATE.REGS[4], "%s", str);
+                    {  
+                        FILE *fi = fdopen(CURRENT_STATE.REGS[4], "w");
+                        int charsLeft = CURRENT_STATE.REGS[6];
+                        int place = 0;
+                        shift = 0;
+                        uint32_t inpt = mem_read_32(CURRENT_STATE.REGS[5]);
+                        unsigned int t;
+                        while (charsLeft > 0)
+                        {
+                            t = (inpt & (0xFF << 24-place)) >> (24-place);
+                            fprintf(fi, "%c", t);
+                            place += 8;
+                            charsLeft--;
+                            if (place > 24)
+                            {
+                                place = 0;
+                                shift += 4;
+                                inpt = mem_read_32(CURRENT_STATE.REGS[5] + shift);
+                            }
+                        }
+                        fflush(fi); // actually write to the file
                         NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
                     else if (CURRENT_STATE.REGS[2] == 16)
                     {
-                        fclose((FILE *) CURRENT_STATE.REGS[4]);
+                        FILE *fi = fdopen(CURRENT_STATE.REGS[4], filemode);
+                        int i = fclose(fi);
                     }
                     else if (CURRENT_STATE.REGS[2] == 17)
                     {
-                        printf("Exiting with code %d", CURRENT_STATE.REGS[4]);
+                        printf("Exiting with code %d\n", CURRENT_STATE.REGS[4]);
                         RUN_BIT = 0;
                     }
                     else if (CURRENT_STATE.REGS[2] == 34)
                     {
-                        printf("%x", CURRENT_STATE.REGS[4]);
+                        printf("0x%x", CURRENT_STATE.REGS[4]);
                     }
                     break;
                 case SUBOP_SLT:
