@@ -420,10 +420,14 @@ void execute()
             NEXT_STATE.REGS[dcd_rt] = sign_extend_b2w((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
             break;
         case OP_LBU:
-            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFF000000;
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 4);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = ((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
             break;
         case OP_LHU:
-            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) & 0xFFFF0000;
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 2);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = ((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
             break;
         case OP_LW:
             NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]);
