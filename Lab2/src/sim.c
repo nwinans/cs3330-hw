@@ -5,6 +5,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "shell.h"
 
 #define OP_SPECIAL    0x00
@@ -14,6 +16,9 @@
 #define SUBOP_SLLV    0x04
 #define SUBOP_SRLV    0x06
 #define SUBOP_SRAV    0x07
+#define SUBOP_JR      0x08
+#define SUBOP_JALR    0x09
+#define SUBOP_SYSCALL 0x0C
 #define SUBOP_MFHI    0x10
 #define SUBOP_MTHI    0x11
 #define SUBOP_MFLO    0x12
@@ -32,6 +37,13 @@
 #define SUBOP_NOR     0x27
 #define SUBOP_SLT     0x2A
 #define SUBOP_SLTU    0x2B
+#define OP_REGIMM     0x01
+#define OP_J          0x02
+#define OP_JAL        0x03
+#define OP_BEQ        0x04
+#define OP_BNE        0x05
+#define OP_BLEZ       0x06
+#define OP_BGTZ       0x07
 #define OP_ADDI       0x08
 #define OP_ADDIU      0x09
 #define OP_SLTI       0x0A
@@ -39,7 +51,18 @@
 #define OP_ANDI       0x0C
 #define OP_ORI        0x0D
 #define OP_XORI       0x0E
-#define SUBOP_SYSCALL 0x0C
+#define OP_LUI        0x0F
+#define OP_LB         0x20
+#define OP_LH         0x21
+#define OP_LW         0x23
+#define OP_LBU        0x24
+#define OP_LHU        0x25
+#define OP_SB         0x28
+#define OP_SH         0x29
+#define OP_SW         0x2B
+#define REGOP_BGEZ    0x01
+#define REGOP_BLTZAL  0x10
+#define REGOP_BGEZAL  0x11
 
 uint32_t dcd_op;     /* decoded opcode */
 uint32_t dcd_rs;     /* decoded rs operand */
@@ -52,10 +75,20 @@ uint32_t dcd_target; /* decoded target address */
 int      dcd_se_imm; /* decoded sign-extended immediate value */
 uint32_t inst;       /* machine instruction */
 uint64_t product;
+int offset;
+int shift;
+int value;
+int mask;
+char * filemode;
 
 uint32_t sign_extend_h2w(uint16_t c)
 {
     return (c & 0x8000) ? (c | 0xffff8000) : c;
+}
+
+uint32_t sign_extend_b2w(uint8_t c)
+{
+    return (c & 0x80) ? (c | 0xFFFFFF80) : c;
 }
 
 int32_t un_to_sign(uint32_t c)
@@ -117,6 +150,13 @@ void execute()
                 case SUBOP_SRAV:
                     NEXT_STATE.REGS[dcd_rd] = ((int32_t) CURRENT_STATE.REGS[dcd_rt]) >> (CURRENT_STATE.REGS[dcd_rs] & 0x1F);
                     break;
+                case SUBOP_JR:
+                    NEXT_STATE.PC = CURRENT_STATE.REGS[dcd_rs];
+                    break;
+                case SUBOP_JALR:
+                    NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.PC + 4; 
+                    NEXT_STATE.PC = CURRENT_STATE.REGS[dcd_rs];
+                    break;
                 case SUBOP_MFHI:
                     NEXT_STATE.REGS[dcd_rd] = CURRENT_STATE.HI;
                     break;
@@ -173,29 +213,122 @@ void execute()
                     break;
                 case SUBOP_SYSCALL:
                     if (CURRENT_STATE.REGS[2] == 1)
-                        printf("%d\n", CURRENT_STATE.REGS[4]);
-                    if (CURRENT_STATE.REGS[2] == 10)
+                        printf("%d", CURRENT_STATE.REGS[4]);
+                    else if (CURRENT_STATE.REGS[2] == 4)
+                    {
+                        shift = 0;
+                        unsigned int input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        unsigned int c,d,e,f;
+                        while (1) {
+                            c = (input & 0xFF000000) >> 24;
+                            d = (input & 0xFF0000) >> 16;
+                            e = (input & 0xFF00) >> 8;
+                            f = (input & 0xFF);
+                            if (c == 0) break;
+                            printf("%c", c);
+                            if (d == 0) break;
+                            printf("%c", d);
+                            if (e == 0) break;
+                            printf("%c", e);
+                            if (f == 0) break;
+                            printf("%c", f);
+                            shift += 4;
+                            input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        }
+                    }
+                    else if (CURRENT_STATE.REGS[2] == 9)
+                        CURRENT_STATE.REGS[2] = (int) (long) malloc(CURRENT_STATE.REGS[4]);
+                    else if (CURRENT_STATE.REGS[2] == 10)
                         RUN_BIT = 0;
-                    if (CURRENT_STATE.REGS[2] == 13)
+                    else if (CURRENT_STATE.REGS[2] == 11)
+                        printf("%c", CURRENT_STATE.REGS[4]);
+                    else if (CURRENT_STATE.REGS[2] == 13)
                     {
-                        FILE *f = fopen((char *) (intptr_t) CURRENT_STATE.REGS[4], (CURRENT_STATE.REGS[5] == 0) ? "r" : "w");
-                        NEXT_STATE.REGS[2] = (uint32_t) f;
+                        char buffer[100];
+                        shift = 0;
+                        unsigned int input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        unsigned int c,d,e,g;
+                        while (1) {
+                            c = (input & 0xFF000000) >> 24;
+                            d = (input & 0xFF0000) >> 16;
+                            e = (input & 0xFF00) >> 8;
+                            g = (input & 0xFF);
+                            if (c == 0) break;
+                            sprintf(buffer+shift, "%c", c);
+                            if (d == 0) break;
+                            sprintf(buffer+shift+1, "%c", d);
+                            if (e == 0) break;
+                            sprintf(buffer+shift+2, "%c", e);
+                            if (g == 0) break;
+                            sprintf(buffer+shift+3, "%c", g);
+                            shift += 4;
+                            input = mem_read_32(CURRENT_STATE.REGS[4] + shift);
+                        }
+                        filemode = (CURRENT_STATE.REGS[5] == 0) ? "r+" : "w+";
+                        FILE * f = fopen(buffer, filemode);
+                        NEXT_STATE.REGS[2] = fileno(f);
                     }
-                    if (CURRENT_STATE.REGS[2] == 15)
+                    else if (CURRENT_STATE.REGS[2] == 14) 
                     {
-                        char str[CURRENT_STATE.REGS[6]];
-                        *str = (char *) CURRENT_STATE.REGS[5]; 
-                        fprintf((FILE *) CURRENT_STATE.REGS[4], "%s", str);
+                        FILE *fi = fdopen(CURRENT_STATE.REGS[4], "r");
+                        rewind(fi);
+                        char buffer[CURRENT_STATE.REGS[6] + 1];
+                        if (fread(buffer, 1, CURRENT_STATE.REGS[6], fi) == 0)
+                        {
+                            NEXT_STATE.REGS[2] = 0;
+                            break;
+                        };
+                        shift = CURRENT_STATE.REGS[6];
+                        char temp[4];
+                        char * b = buffer;
+                        while (shift > 0) 
+                        {
+                            memcpy (temp, b, 4);                        
+                            char * tt = temp;
+                            uint32_t data = ((*tt) << 24) + (*(tt+1) << 16) + (*(tt+2) << 8) + (*(tt+3));
+                            mem_write_32(CURRENT_STATE.REGS[5] + (CURRENT_STATE.REGS[6] - shift), data);
+                            shift -= 4;
+                            b += 4;
+                        }
                         NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
-                    if (CURRENT_STATE.REGS[2] == 14) 
-                    {
-                        fgets((char *) CURRENT_STATE.REGS[5], CURRENT_STATE.REGS[6], (FILE *) CURRENT_STATE.REGS[4]);
+                    else if (CURRENT_STATE.REGS[2] == 15)
+                    {  
+                        FILE *fi = fdopen(CURRENT_STATE.REGS[4], "w");
+                        int charsLeft = CURRENT_STATE.REGS[6];
+                        int place = 0;
+                        shift = 0;
+                        uint32_t inpt = mem_read_32(CURRENT_STATE.REGS[5]);
+                        unsigned int t;
+                        while (charsLeft > 0)
+                        {
+                            t = (inpt & (0xFF << 24-place)) >> (24-place);
+                            fprintf(fi, "%c", t);
+                            place += 8;
+                            charsLeft--;
+                            if (place > 24)
+                            {
+                                place = 0;
+                                shift += 4;
+                                inpt = mem_read_32(CURRENT_STATE.REGS[5] + shift);
+                            }
+                        }
+                        fflush(fi); // actually write to the file
                         NEXT_STATE.REGS[2] = CURRENT_STATE.REGS[6];
                     }
-                    if (CURRENT_STATE.REGS[2] == 16)
+                    else if (CURRENT_STATE.REGS[2] == 16)
                     {
-                        fclose((FILE *) CURRENT_STATE.REGS[4]);
+                        FILE *fi = fdopen(CURRENT_STATE.REGS[4], filemode);
+                        int i = fclose(fi);
+                    }
+                    else if (CURRENT_STATE.REGS[2] == 17)
+                    {
+                        printf("Exiting with code %d\n", CURRENT_STATE.REGS[4]);
+                        RUN_BIT = 0;
+                    }
+                    else if (CURRENT_STATE.REGS[2] == 34)
+                    {
+                        printf("0x%x", CURRENT_STATE.REGS[4]);
                     }
                     break;
                 case SUBOP_SLT:
@@ -206,7 +339,52 @@ void execute()
                     break;
             }
             break;
-
+        case OP_REGIMM:
+            switch (dcd_rt)
+            {
+                case REGOP_BGEZ:
+                    if ((int) CURRENT_STATE.REGS[dcd_rs] >= 0)
+                        NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+                    break;
+                case REGOP_BLTZAL:
+                    if ((int) CURRENT_STATE.REGS[dcd_rs] < 0)
+                    {
+                        NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
+                        NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+                    }
+                    break;
+                case REGOP_BGEZAL:
+                    if ((int) CURRENT_STATE.REGS[dcd_rs] >= 0)
+                    {
+                        NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
+                        NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+                    }
+                    break;
+            }
+            break;
+        case OP_J:
+            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
+            break;
+        case OP_JAL:
+            NEXT_STATE.PC = (CURRENT_STATE.PC & 0xF0000000) + (dcd_target << 2);
+            NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 4;
+            break;
+        case OP_BEQ:
+            if (CURRENT_STATE.REGS[dcd_rs] == CURRENT_STATE.REGS[dcd_rt])
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+            break;
+        case OP_BNE:
+            if (CURRENT_STATE.REGS[dcd_rs] != CURRENT_STATE.REGS[dcd_rt])
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+            break;
+        case OP_BLEZ:
+            if ((int) CURRENT_STATE.REGS[dcd_rs] <= 0)
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+            break;
+        case OP_BGTZ:
+            if ((int) CURRENT_STATE.REGS[dcd_rs] > 0) 
+                NEXT_STATE.PC = CURRENT_STATE.PC + (dcd_se_imm << 2);
+            break;
         case OP_ADDI:
             NEXT_STATE.REGS[dcd_rt] = un_to_sign(CURRENT_STATE.REGS[dcd_rs]) + dcd_se_imm;
             break;
@@ -227,6 +405,49 @@ void execute()
             break;
         case OP_XORI:
             NEXT_STATE.REGS[dcd_rt] = dcd_imm ^ CURRENT_STATE.REGS[dcd_rs];
+            break;
+        case OP_LUI:
+            NEXT_STATE.REGS[dcd_rt] = dcd_imm << 16;
+            break;
+        case OP_LB:
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 4);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = sign_extend_b2w((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
+            break;
+        case OP_LH:
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 2);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = sign_extend_b2w((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
+            break;
+        case OP_LBU:
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 4);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = ((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
+            break;
+        case OP_LHU:
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 2);
+            shift = dcd_se_imm - offset;
+            NEXT_STATE.REGS[dcd_rt] = ((mem_read_32(shift + CURRENT_STATE.REGS[dcd_rs]) & (0xFFFF << offset * 16)) >> (offset * 16));
+            break;
+        case OP_LW:
+            NEXT_STATE.REGS[dcd_rt] = mem_read_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]);
+            break;
+        case OP_SB:
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 4);
+            shift = dcd_se_imm - offset;
+            value = (CURRENT_STATE.REGS[dcd_rt] & (0xFF)) << (offset * 8);
+            mask = (mem_read_32(CURRENT_STATE.REGS[dcd_rs] + shift)) & (~(0xFF << (offset * 8)));
+            mem_write_32(shift + CURRENT_STATE.REGS[dcd_rs], value + mask);
+            break;
+        case OP_SH:
+            offset = ((int) (dcd_se_imm + CURRENT_STATE.REGS[dcd_rs]) % 2);
+            shift = dcd_se_imm - offset;
+            value = (CURRENT_STATE.REGS[dcd_rt] & (0xFFFF)) << (offset * 16);
+            mask = (mem_read_32(CURRENT_STATE.REGS[dcd_rs] + shift)) & (~(0xFFFF << (offset * 16)));
+            mem_write_32(shift + CURRENT_STATE.REGS[dcd_rs], value + mask);            
+            break;
+        case OP_SW:
+            mem_write_32(dcd_se_imm + CURRENT_STATE.REGS[dcd_rs], CURRENT_STATE.REGS[dcd_rt]);
             break;
     }
 
