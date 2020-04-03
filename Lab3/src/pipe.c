@@ -534,7 +534,7 @@ void pipe_stage_execute()
         }
     }
 
-    bp_update(bp, op->pc, op->is_branch, op->branch_taken, op->branch_cond, op->branch_dest);
+    bp_update(bp, op->pc, op->is_branch, op->branch_cond, op->branch_taken, op->branch_dest);
 
     /* We collect data to calculate your branch predictor accuracy here.
        You can check the accuracy using "rdump" command.
@@ -707,13 +707,23 @@ void pipe_stage_fetch()
     op->pc = pipe.PC;
     pipe.decode_op = op;
 
-    bp_predict(bp, op->pc, (uint8_t *) &(op->pred_is_branch), (uint8_t *) &(op->pred_is_cond), (uint8_t *) &(op->pred_branch_taken), &(op->pred_branch_dest));
+    uint8_t is_branch;
+    uint8_t is_cond;
+    uint8_t is_taken;
+    uint32_t branch_dest;
+    bp_predict(bp, pipe.PC, &is_branch, &is_cond, &is_taken , &branch_dest);
+    uint32_t nextPC = branch_dest;
+    op->pred_branch_dest = branch_dest;
+    op->pred_branch_taken = is_taken;
+    op->pred_is_branch = is_branch;
+    op->pred_is_cond = is_cond;
 
-    pipe.PC = op->pred_branch_dest;
-    /*op->branch_dest = op->pred_branch_dest;
-    op->branch_cond = op->pred_is_cond;
-    op->branch_taken = op->pred_branch_taken;
-    op->is_branch = op->pred_is_branch;*/
+#ifdef DEBUG
+    printf("fetch (%x): branch %d dest %x taken %d (nextPC %x)\n",
+            pipe.PC, is_branch, branch_dest, is_taken, nextPC);
+ #endif
+
+    pipe.PC = nextPC;
 
     stat_inst_fetch++;
 }

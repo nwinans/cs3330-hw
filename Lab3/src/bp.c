@@ -6,12 +6,12 @@
 
 int32_t btb_pc(uint32_t x) 
 {
-    return x>>2 && 0x3FF; // we want bits 11-2, so shift right and then grab the next 10
+    return x>>2 & 0x3FF; // we want bits 11-2, so shift right and then grab the next 10
 }
 
 uint8_t gshare(uint8_t x, uint8_t y)
 {
-    return ((0xFF) & x) ^ ((y >> 2) & 0xFF);
+    return (x & 0xFF) ^ ((y >> 2) & 0xFF);
 }
 
 bp_t *bp_new(int ghr_bits, int btb_size)
@@ -50,6 +50,7 @@ void bp_predict(bp_t *b, uint32_t pc, uint8_t *branch, uint8_t *cond, uint8_t *t
     *taken = 0;
     *dest = 0;
 
+
     // if the tag at pc doesn't equal the pc, the entry doesn't exist in the btb, our prediction is just pc + 4
     // if the valid tag = 0 (is false), then we predicted this was a branch but its really not
     if ((b->btb_tag[btb_pc(pc)] != pc) || !(b->btb_valid[btb_pc(pc)])) 
@@ -64,19 +65,21 @@ void bp_predict(bp_t *b, uint32_t pc, uint8_t *branch, uint8_t *cond, uint8_t *t
     {
         *branch = 1; //we have an actual branch
         *cond = b->btb_cond[btb_pc(pc)];
-
         //if the branch is unconditionally taken or the patten history table suggests its strongly or weakly taken, we are gonna take it
-        if ((b->btb_cond[btb_pc(pc)] == 0) || (b->pht[gshare(b->ghr, pc)] > 1))
+        if (!(b->btb_cond[btb_pc(pc)]) || (b->pht[gshare(b->ghr, pc)] > 1))
         {
+            printf("here");
             *taken = 1;
             *dest = b->btb_dest[btb_pc(pc)];
         } else //not taking the branch
         {
+            printf("conditional and not strong - %d\n", b->pht[gshare(b->ghr, pc)]);
             *taken = 0;
             *dest = pc + 4;
         }
     }
     else *dest = pc + 4; // catch all
+    printf("%d --", *dest);
 }
 
 void bp_update(bp_t *b, uint32_t pc, uint8_t branch, uint8_t cond, uint8_t taken, uint32_t dest)
@@ -86,8 +89,14 @@ void bp_update(bp_t *b, uint32_t pc, uint8_t branch, uint8_t cond, uint8_t taken
     } else {
         if (cond)
         {
-            if((taken) && (b->pht[gshare(b->ghr, pc)] != 3)) b->pht[gshare(b->ghr, pc)] += 1; //taken, if the pattern history is not a max of strongly taken, increase it
-            else if ((!taken) && (b->pht[gshare(b->ghr, pc)] != 0)) b->pht[gshare(b->ghr, pc)] -= 1; //not taken, if the patten history is not a min of strongly not taken, decrease it
+            if((taken) && (b->pht[gshare(b->ghr, pc)] != 3)) {
+                b->pht[gshare(b->ghr, pc)] += 1; //taken, if the pattern history is not a max of strongly taken, increase it
+                printf("Incremented pht index %d to %d\n", gshare(b->ghr, pc), b->pht[gshare(b->ghr, pc)]);
+            }
+            else if ((!taken) && (b->pht[gshare(b->ghr, pc)] != 0)){
+                b->pht[gshare(b->ghr, pc)] -= 1; //not taken, if the patten history is not a min of strongly not taken, decrease it
+                printf("Decremented pht index %d to %d\n", gshare(b->ghr, pc), b->pht[gshare(b->ghr, pc)]);
+            }
             
             b->ghr = (b->ghr << 1) | taken; //update the global history register
         }
