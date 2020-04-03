@@ -528,7 +528,7 @@ void pipe_stage_execute()
 
     */
 
-  
+    bp_update(bp, op->pc, op->is_branch, op->branch_taken, op->branch_cond, op->branch_dest);
 
     /* We collect data to calculate your branch predictor accuracy here.
        You can check the accuracy using "rdump" command.
