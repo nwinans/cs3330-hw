@@ -517,16 +517,22 @@ void pipe_stage_execute()
     }
 
     /* handle branch recoveries at this point */
-    if ((op->is_branch == 1) && ((op->pred_branch_dest != op->branch_dest) || ((!bp->btb_valid[btb_pc(op->pc)]) || (bp->btb_tag[btb_pc(op->pc)] != op->pc)))){
-        if (op->branch_taken) pipe_recover(3, op->branch_dest);
-        else pipe_recover(3, op->pc+4);
-    } 
-
-    /* train branch predictor
-    TODO:
-    Use the predicted value and actual value to train your branch predictor.
-
-    */
+    if (op->is_branch) 
+    {
+        if (op->pred_branch_taken != op->branch_taken)
+        {
+            if (op->branch_taken) pipe_recover(3, op->branch_dest);
+            else pipe_recover(3, op->pc+4);
+        } else if (op->pred_branch_dest != op->branch_dest) 
+        {
+            if (op->branch_taken) pipe_recover(3, op->branch_dest);
+            else pipe_recover(3, (op->pc)+4);
+        } else if (!(bp->btb_valid[btb_pc(op->pc)]) || (bp->btb_tag[btb_pc(op->pc)] != op->pc))
+        {
+            if (op->branch_taken) pipe_recover(3, op->branch_dest);
+            else pipe_recover(3, (op->pc)+4);
+        }
+    }
 
     bp_update(bp, op->pc, op->is_branch, op->branch_taken, op->branch_cond, op->branch_dest);
 
@@ -701,19 +707,13 @@ void pipe_stage_fetch()
     op->pc = pipe.PC;
     pipe.decode_op = op;
 
-    /* update PC: branch predictor
-    TODO:
-    Use branch prediction here to decide the correct nextPC.
-    Note that the starting code assumes "always not taken", so always fetches next instruction.
-    */
-    uint32_t nextPC = pipe.PC + 4;
+    bp_predict(bp, op->pc, (uint8_t *) &(op->pred_is_branch), (uint8_t *) &(op->pred_is_cond), (uint8_t *) &(op->pred_branch_taken), &(op->pred_branch_dest));
 
-// #ifdef DEBUG
-//     printf("fetch (%x): branch %d dest %x taken %d (nextPC %x)\n",
-//             pipe.PC, branch, dest, taken, nextPC);
-// #endif
-
-    pipe.PC = nextPC;
+    pipe.PC = op->pred_branch_dest;
+    /*op->branch_dest = op->pred_branch_dest;
+    op->branch_cond = op->pred_is_cond;
+    op->branch_taken = op->pred_branch_taken;
+    op->is_branch = op->pred_is_branch;*/
 
     stat_inst_fetch++;
 }

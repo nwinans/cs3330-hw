@@ -1,8 +1,3 @@
-/*
-TODO:
-Implement the functions of your branch predictor here.
-*/
-
 #include "bp.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -55,28 +50,37 @@ void bp_predict(bp_t *b, uint32_t pc, uint8_t *branch, uint8_t *cond, uint8_t *t
     *taken = 0;
     *dest = 0;
 
-    /* TODO: Look up in BTB. Index into the branch target buffer from bits [11:2] of the PC.
-       If the entry resides in the BTB, then extract the relevant fields from the BTB.*/ 
-    
-    /* TODO: Look up in directional predictor */
-     
+    // if the tag at pc doesn't equal the pc, the entry doesn't exist in the btb, our prediction is just pc + 4
+    // if the valid tag = 0 (is false), then we predicted this was a branch but its really not
+    if ((b->btb_tag[btb_pc(pc)] != pc) || !(b->btb_valid[btb_pc(pc)])) 
+    {
+        // don't need to touch branch, it isnt one
+        // don't need to touch cond, 0 means unconditional, which this technically is
+        // don't need to touch taken, this isn't a branch
+        *dest = pc + 4;
+    }
+    //if the entry exits and is valid, we have an actual branch
+    else if ((b->btb_tag[btb_pc(pc)] == pc) && (b->btb_valid[btb_pc(pc)]))
+    {
+        *branch = 1; //we have an actual branch
+        *cond = b->btb_cond[btb_pc(pc)];
+
+        //if the branch is unconditionally taken or the patten history table suggests its strongly or weakly taken, we are gonna take it
+        if ((b->btb_cond[btb_pc(pc)] == 0) || (b->pht[gshare(b->ghr, pc)] > 1))
+        {
+            *taken = 1;
+            *dest = b->btb_dest[btb_pc(pc)];
+        } else //not taking the branch
+        {
+            *taken = 0;
+            *dest = pc + 4;
+        }
+    }
+    else *dest = pc + 4; // catch all
 }
 
 void bp_update(bp_t *b, uint32_t pc, uint8_t branch, uint8_t cond, uint8_t taken, uint32_t dest)
 {
-    /* TODO: Update BTB for the two following scenarios: */
-   
-    /* TODO: i).  We were incorrectly predicted as a branch. In this case you should clear the BTB entry by setting the valid bit to 0. */
-    
-  
-    /* TODO: ii). We are a branch. Make sure BTB is up-to-date by updating the relevant destination, condition, valid and tag bit to its appropriate value. */
-       
-
-    /* TODO: Update gshare directional predictor */
-   
-
-    /* TODO: update global history register */
-
     if (!branch) {
         b->btb_valid[btb_pc(pc)] = 0;
     } else {
@@ -90,7 +94,7 @@ void bp_update(bp_t *b, uint32_t pc, uint8_t branch, uint8_t cond, uint8_t taken
 
         b->btb_valid[btb_pc(pc)] = 1;
         b->btb_tag[btb_pc(pc)] = pc;
-        b->btb_cond[btb_pc(pc)] = (cond) ? 1 : 0;
+        b->btb_cond[btb_pc(pc)] = cond;
         b->btb_dest[btb_pc(pc)] = dest;
     }
 }
