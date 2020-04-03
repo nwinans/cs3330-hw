@@ -9,6 +9,16 @@ Implement the functions of your branch predictor here.
 
 #define log2(i) (__builtin_ffs( (i) ) - 1)
 
+int32_t btb_pc(uint32_t x) 
+{
+    return x>>2 && 0x3FF; // we want bits 11-2, so shift right and then grab the next 10
+}
+
+uint8_t gshare(uint8_t x, uint8_t y)
+{
+    return ((0xFF) & x) ^ ((y >> 2) & 0xFF);
+}
+
 bp_t *bp_new(int ghr_bits, int btb_size)
 {
     bp_t *b = calloc(sizeof(bp_t), 1);
@@ -66,5 +76,18 @@ void bp_update(bp_t *b, uint32_t pc, uint8_t branch, uint8_t cond, uint8_t taken
    
 
     /* TODO: update global history register */
+
+    if (cond)
+    {
+        if((taken) && (b->pht[gshare(b->ghr, pc)] != 3)) b->pht[gshare(b->ghr, pc)] += 1; //taken, if the pattern history is not a max of strongly taken, increase it
+        else if ((!taken) && (b->pht[gshare(b->ghr, pc)] != 0)) b->pht[gshare(b->ghr, pc)] -= 1; //not taken, if the patten history is not a min of strongly not taken, decrease it
+        
+        b->ghr = (b->ghr << 1) | taken; //update the ghr
+    }
+
+    b->btb_valid[btb_pc(pc)] = 1;
+    b->btb_tag[btb_pc(pc)] = pc;
+    b->btb_cond[btb_pc(pc)] = (cond) ? 1 : 0;
+    b->btb_dest[btb_pc(pc)] = dest;
    
 }

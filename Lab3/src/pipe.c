@@ -1,12 +1,15 @@
 #include "pipe.h"
 #include "shell.h"
 #include "mips.h"
+#include "bp.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
 
 #define DEBUG
+
+bp_t *bp;
 
 /* debug */
 void print_op(Pipe_Op *op)
@@ -27,10 +30,7 @@ void pipe_init()
     memset(&pipe, 0, sizeof(Pipe_State));
     pipe.PC = 0x00400000;
 
-    /* branch predictor: 8-bit GHR, 1024-entry direct-mapped BTB
-    TODO:
-    Initialize your branch predictor here (if necessary).
-    */
+    bp = bp_new(8, 1024);
 }
 
 void pipe_cycle()
@@ -516,25 +516,19 @@ void pipe_stage_execute()
             break;
     }
 
-    /* handle branch recoveries at this point
-    TODO:
-    Use predefined pipe_recover function to recover from incorrectly predicted branches.
-
-    The usage of pipe_recover is shown below.
-    Prototype:
-        void pipe_recover(int flush, uint32_t dest);
-    Parameters:
-        flush: Number of stages that will be flushed. 
-        dest: Address of the correct instruction that will be fetched.
-    */
-    if (op->branch_taken)
-        pipe_recover(3, op->branch_dest);
+    /* handle branch recoveries at this point */
+    if ((op->is_branch == 1) && ((op->pred_branch_dest != op->branch_dest) || ((!btb[btb_pc(op->pc)].valid) || (btb[btb_pc(op->pc)].tag != op->pc)))){
+        if (op->branch_taken) pipe_recover(3, op->branch_dest);
+        else pipe_recover(3, op->pc+4);
+    } 
 
     /* train branch predictor
     TODO:
     Use the predicted value and actual value to train your branch predictor.
 
     */
+
+  
 
     /* We collect data to calculate your branch predictor accuracy here.
        You can check the accuracy using "rdump" command.
