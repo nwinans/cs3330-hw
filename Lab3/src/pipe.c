@@ -517,21 +517,10 @@ void pipe_stage_execute()
     }
 
     /* handle branch recoveries at this point */
-    if (op->is_branch) 
+    if (op->is_branch && ((op->pred_branch_taken != op->branch_taken) || (!(bp->btb_valid[btb_pc(op->pc)]) || (bp->btb_tag[btb_pc(op->pc)] != op->pc))))
     {
-        if (op->pred_branch_taken != op->branch_taken)
-        {
-            if (op->branch_taken) pipe_recover(3, op->branch_dest);
-            else pipe_recover(3, op->pc+4);
-        } else if (op->pred_branch_dest != op->branch_dest) 
-        {
-            if (op->branch_taken) pipe_recover(3, op->branch_dest);
-            else pipe_recover(3, (op->pc)+4);
-        } else if (!(bp->btb_valid[btb_pc(op->pc)]) || (bp->btb_tag[btb_pc(op->pc)] != op->pc))
-        {
-            if (op->branch_taken) pipe_recover(3, op->branch_dest);
-            else pipe_recover(3, (op->pc)+4);
-        }
+        if (op->branch_taken) pipe_recover(3, op->branch_dest);
+        else pipe_recover(3, op->pc + 4);
     }
 
     bp_update(bp, op->pc, op->is_branch, op->branch_cond, op->branch_taken, op->branch_dest);
