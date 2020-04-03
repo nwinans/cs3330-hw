@@ -517,7 +517,7 @@ void pipe_stage_execute()
     }
 
     /* handle branch recoveries at this point */
-    if ((op->is_branch == 1) && ((op->pred_branch_dest != op->branch_dest) || ((!btb[btb_pc(op->pc)].valid) || (btb[btb_pc(op->pc)].tag != op->pc)))){
+    if ((op->is_branch == 1) && ((op->pred_branch_dest != op->branch_dest) || ((!bp->btb_valid[btb_pc(op->pc)]) || (bp->btb_tag[btb_pc(op->pc)] != op->pc)))){
         if (op->branch_taken) pipe_recover(3, op->branch_dest);
         else pipe_recover(3, op->pc+4);
     } 

@@ -29,6 +29,9 @@ typedef struct
     uint8_t *btb_cond;
 } bp_t;
 
+int32_t btb_pc(uint32_t x);
+uint8_t gshare(uint8_t x, uint8_t y);
+
 bp_t *bp_new(int ghr_bits, int btb_size);
 void bp_destroy(bp_t *b);
 
